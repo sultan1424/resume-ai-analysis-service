@@ -9,11 +9,11 @@ AWS_REGION       = os.environ.get("AWS_REGION", "us-east-1")
 # ─────────────────────────────────────────
 # Factor 3: Config from environment
 # Factor 4: Bedrock is a backing service
-# Using Amazon Titan Text — available on all AWS accounts
+# Using Amazon Nova Lite — active model
 # ─────────────────────────────────────────
 BEDROCK_MODEL_ID = os.environ.get(
     "BEDROCK_MODEL_ID",
-    "amazon.titan-text-express-v1"
+    "amazon.nova-lite-v1:0"
 )
 
 bedrock_client   = boto3.client("bedrock-runtime", region_name=AWS_REGION)
@@ -57,23 +57,24 @@ Respond ONLY in this exact JSON format with no extra text:
 }}"""
 
     try:
-        response = bedrock_client.invoke_model(
-            modelId     = BEDROCK_MODEL_ID,
-            contentType = "application/json",
-            accept      = "application/json",
-            body        = json.dumps({
-                "inputText": prompt,
-                "textGenerationConfig": {
-                    "maxTokenCount": 1000,
-                    "temperature":   0.3,
-                    "topP":          0.9
+        # Call Amazon Nova model using Converse API
+        response = bedrock_client.converse(
+            modelId  = BEDROCK_MODEL_ID,
+            messages = [
+                {
+                    "role":    "user",
+                    "content": [{"text": prompt}]
                 }
-            })
+            ],
+            inferenceConfig = {
+                "maxTokens":   1000,
+                "temperature": 0.3
+            }
         )
 
-        response_body = json.loads(response["body"].read())
-        raw_text      = response_body["results"][0]["outputText"]
+        raw_text = response["output"]["message"]["content"][0]["text"]
 
+        # Extract JSON from response
         start    = raw_text.find("{")
         end      = raw_text.rfind("}") + 1
         json_str = raw_text[start:end]
